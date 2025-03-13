@@ -26,7 +26,7 @@ func NewCallbackHandler(bot *tgbotapi.BotAPI, phoneEngineer map[string]string, a
 	}
 }
 
-func (h *CallbackHandler) HandleCallback(update tgbotapi.Update, tgUser *sync.Map) {
+func (h *CallbackHandler) HandleCallback(ctx context.Context, update tgbotapi.Update, tgUser *sync.Map) {
 	callback := update.CallbackQuery
 	chatID := callback.Message.Chat.ID
 

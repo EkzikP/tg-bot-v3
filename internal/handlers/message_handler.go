@@ -3,10 +3,9 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"strconv"
+	"github.com/EkzikP/tg-bot-v3/internal/menus"
 	"sync"
 
-	"github.com/EkzikP/sdk_andromeda_go_v2"
 	"github.com/EkzikP/tg-bot-v3/internal/config"
 	"github.com/EkzikP/tg-bot-v3/internal/models"
 	"github.com/EkzikP/tg-bot-v3/internal/services"
@@ -37,7 +36,7 @@ func (h *MessageHandler) sendMessage(msg tgbotapi.MessageConfig) {
 	h.Bot.Send(msg)
 }
 
-func (h *MessageHandler) HandleCommand(update tgbotapi.Update, tgUsers *sync.Map) {
+func (h *MessageHandler) HandleCommand(ctx context.Context, update tgbotapi.Update, tgUsers *sync.Map) {
 	chatID := update.Message.Chat.ID
 
 	if !update.Message.Chat.IsPrivate() {
@@ -51,14 +50,44 @@ func (h *MessageHandler) HandleCommand(update tgbotapi.Update, tgUsers *sync.Map
 
 		if !h.verifyPhone(&update, tgUsers) {
 			msg := h.createPhoneRequest(chatID)
+			msg.ReplyToMessageID = update.Message.MessageID
 			h.sendMessage(msg)
 			return
 		}
 
-		h.Operations[chatID] = models.New()
+		h.Operations.Store(chatID, models.New())
 		msg := tgbotapi.NewMessage(chatID, "Введите пультовый номер объекта!")
 		h.sendMessage(msg)
 		return
+	}
+
+	currentOperations, _ := h.Operations.LoadOrStore(chatID, models.New())
+	if currentOperations.(models.Operation).NumberObject == "" {
+		if !h.verifyPhone(&update, tgUsers) {
+			msg := h.createPhoneRequest(chatID)
+			msg.ReplyToMessageID = update.Message.MessageID
+			h.sendMessage(msg)
+			return
+		}
+
+		if update.Message.Contact != nil {
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Введите пультовый номер объекта!")
+			msg.ReplyToMessageID = update.Message.MessageID
+			h.sendMessage(msg)
+			return
+		}
+
+		if message, ok := utils.CheckNumberObject(update.Message.Text); !ok {
+			text := fmt.Sprintf("%s\nВведите пультовый номер объекта!", message)
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
+			msg.ReplyToMessageID = update.Message.MessageID
+			h.sendMessage(msg)
+			return
+		}
+
+		if object, err := h.Andromeda.GetSite(ctx, update.Message.Text) {
+
+		}
 	}
 }
 
@@ -67,5 +96,7 @@ func (h *MessageHandler) verifyPhone(update *tgbotapi.Update, tgUser *sync.Map) 
 }
 
 func (h *MessageHandler) createPhoneRequest(chatID int64) tgbotapi.MessageConfig {
-	// Создание запроса телефона
+	menu := menus.New()
+	msg := menu.RequestContact(chatID)
+	return msg
 }

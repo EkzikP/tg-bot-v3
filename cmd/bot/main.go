@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"sync"
@@ -15,6 +16,7 @@ import (
 )
 
 func main() {
+	ctx := context.Background()
 	// Загрузка конфигурации
 	cfg := config.Read()
 
@@ -58,12 +60,12 @@ func main() {
 	// Обработка сообщений
 	for update := range updates {
 		if update.Message != nil {
-			handlerMessage.HandleCommand(update, &TgUsers)
+			handlerMessage.HandleCommand(ctx, update, &TgUsers)
 			return
 		}
 
 		if update.CallbackQuery != nil && update.CallbackQuery.Message != nil {
-			handlerCallback.HandleCallback(update, &TgUsers)
+			handlerCallback.HandleCallback(ctx, update, &TgUsers)
 			return
 		}
 
