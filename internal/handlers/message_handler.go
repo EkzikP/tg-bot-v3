@@ -6,6 +6,7 @@ import (
 	"github.com/EkzikP/tg-bot-v3/internal/menus"
 	"sync"
 
+	"github.com/EkzikP/sdk_andromeda_go_v2"
 	"github.com/EkzikP/tg-bot-v3/internal/config"
 	"github.com/EkzikP/tg-bot-v3/internal/models"
 	"github.com/EkzikP/tg-bot-v3/internal/services"
@@ -71,7 +72,7 @@ func (h *MessageHandler) HandleCommand(ctx context.Context, update tgbotapi.Upda
 		}
 
 		if update.Message.Contact != nil {
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Введите пультовый номер объекта!")
+			msg := tgbotapi.NewMessage(chatID, "Введите пультовый номер объекта!")
 			msg.ReplyToMessageID = update.Message.MessageID
 			h.sendMessage(msg)
 			return
@@ -79,14 +80,36 @@ func (h *MessageHandler) HandleCommand(ctx context.Context, update tgbotapi.Upda
 
 		if message, ok := utils.CheckNumberObject(update.Message.Text); !ok {
 			text := fmt.Sprintf("%s\nВведите пультовый номер объекта!", message)
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
+			msg := tgbotapi.NewMessage(chatID, text)
 			msg.ReplyToMessageID = update.Message.MessageID
 			h.sendMessage(msg)
 			return
 		}
 
-		if object, err := h.Andromeda.GetSite(ctx, update.Message.Text) {
+		object, err := h.Andromeda.GetSite(ctx, update.Message.Text)
+		if err != nil {
+			text := fmt.Sprintf("%s\nВведите пультовый номер объекта!", err)
+			msg := tgbotapi.NewMessage(chatID, text)
+			msg.ReplyToMessageID = update.Message.MessageID
+			h.sendMessage(msg)
+			return
+		}
 
+		phone, ok := tgUsers.Load(chatID)
+		if !ok {
+			text := fmt.Sprintf("У вас нет прав на этот объект!\nВведите пультовый номер объекта!")
+			msg := tgbotapi.NewMessage(chatID, text)
+			msg.ReplyToMessageID = update.Message.MessageID
+			h.sendMessage(msg)
+			return
+		}
+
+		if !h.Andromeda.CheckUserRights(ctx, object.Id, phone.(string)) {
+			text := fmt.Sprintf("У вас нет прав на этот объект!\nВведите пультовый номер объекта!")
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
+			msg.ReplyToMessageID = update.Message.MessageID
+			h.sendMessage(msg)
+			return
 		}
 	}
 }

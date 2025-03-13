@@ -31,6 +31,6 @@ func (s *AndromedaService) GetSite(ctx context.Context, siteID string) (andromed
 	return resp, nil
 }
 
-func (s *AndromedaService) CheckUserRights(ctx context.Context, siteID string, phone string) (bool, error) {
+func (s *AndromedaService) CheckUserRights(ctx context.Context, siteID string, phone string) bool {
 	// Реализация проверки прав
 }

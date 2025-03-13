@@ -1,6 +1,8 @@
 package utils
 
-import "strconv"
+import (
+	"strconv"
+)
 
 func CheckNumberObject(text string) (string, bool) {
 
