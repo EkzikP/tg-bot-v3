@@ -101,3 +101,13 @@ func BackAndFinish() tgbotapi.InlineKeyboardMarkup {
 
 	return keyboard
 }
+
+func CheckKTS(CheckPanicId string) tgbotapi.InlineKeyboardMarkup {
+	keyboard := tgbotapi.NewInlineKeyboardMarkup()
+	btn := tgbotapi.NewInlineKeyboardButtonData("Получить результат проверки КТС", "ResultCheckKTS")
+	var row []tgbotapi.InlineKeyboardButton
+	row = append(row, btn)
+	keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, row)
+	keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, BackAndFinish().InlineKeyboard...)
+	return keyboard
+}
