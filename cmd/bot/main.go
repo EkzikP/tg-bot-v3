@@ -3,16 +3,15 @@ package main
 import (
 	"context"
 	"database/sql"
-	"log"
-	"sync"
-
 	"github.com/EkzikP/sdk_andromeda_go_v2"
 	"github.com/EkzikP/tg-bot-v3/internal/config"
 	"github.com/EkzikP/tg-bot-v3/internal/handlers"
 	"github.com/EkzikP/tg-bot-v3/internal/services"
 	"github.com/EkzikP/tg-bot-v3/internal/storage"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"log"
 	_ "modernc.org/sqlite"
+	"sync"
 )
 
 func main() {

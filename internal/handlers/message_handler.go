@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/EkzikP/tg-bot-v3/internal/menus"
+	"strconv"
 	"sync"
 
-	"github.com/EkzikP/sdk_andromeda_go_v2"
 	"github.com/EkzikP/tg-bot-v3/internal/config"
 	"github.com/EkzikP/tg-bot-v3/internal/models"
 	"github.com/EkzikP/tg-bot-v3/internal/services"
@@ -20,7 +20,7 @@ type MessageHandler struct {
 	Config     config.Config
 	Storage    *storage.UsersStore
 	Andromeda  *services.AndromedaService
-	Operations sync.Map
+	Operations map[int64]*models.Operation
 }
 
 func NewMessageHandler(bot *tgbotapi.BotAPI, cfg config.Config, store *storage.UsersStore, as *services.AndromedaService) *MessageHandler {
@@ -29,7 +29,7 @@ func NewMessageHandler(bot *tgbotapi.BotAPI, cfg config.Config, store *storage.U
 		Config:     cfg,
 		Storage:    store,
 		Andromeda:  as,
-		Operations: sync.Map{},
+		Operations: make(map[int64]*models.Operation),
 	}
 }
 
@@ -56,14 +56,14 @@ func (h *MessageHandler) HandleCommand(ctx context.Context, update tgbotapi.Upda
 			return
 		}
 
-		h.Operations.Store(chatID, models.New())
+		h.Operations[chatID] = models.New()
 		msg := tgbotapi.NewMessage(chatID, "Введите пультовый номер объекта!")
 		h.sendMessage(msg)
 		return
 	}
 
-	currentOperations, _ := h.Operations.LoadOrStore(chatID, models.New())
-	if currentOperations.(models.Operation).NumberObject == "" {
+	currentOperations := h.Operations[chatID]
+	if currentOperations.NumberObject == "" {
 		if !h.verifyPhone(&update, tgUsers) {
 			msg := h.createPhoneRequest(chatID)
 			msg.ReplyToMessageID = update.Message.MessageID
@@ -104,13 +104,36 @@ func (h *MessageHandler) HandleCommand(ctx context.Context, update tgbotapi.Upda
 			return
 		}
 
-		if !h.Andromeda.CheckUserRights(ctx, object.Id, phone.(string)) {
+		if resp, ok := h.Andromeda.CheckUserRights(ctx, object, phone.(string), h.Config.PhoneEngineer); !ok {
 			text := fmt.Sprintf("У вас нет прав на этот объект!\nВведите пультовый номер объекта!")
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
 			msg.ReplyToMessageID = update.Message.MessageID
 			h.sendMessage(msg)
 			return
+		} else {
+			currentOperations.Update("NumberObject", strconv.Itoa(object.AccountNumber))
+			currentOperations.Update("Object", object)
+			currentOperations.Update("Customers", resp)
+			currentOperations.Update("CurrentMenu", "MainMenu")
 		}
+
+		msg := tgbotapi.NewMessage(chatID, "Работа с объектом "+update.Message.Text)
+		msg.ReplyToMessageID = update.Message.MessageID
+		outMsg, _ := h.Bot.Send(msg)
+		pinMessage := tgbotapi.PinChatMessageConfig{
+			ChatID:              chatID,
+			MessageID:           outMsg.MessageID,
+			DisableNotification: false,
+		}
+		h.Bot.Send(pinMessage)
+
+		currentOperations.Update("CurrentMenu", "MainMenu")
+		currentOperations.Update("CurrentRequest", "")
+
+		mb := menus.New()
+		msg = mb.BuildMainMenu(chatID, currentOperations.NumberObject)
+		h.sendMessage(msg)
+		return
 	}
 }
 

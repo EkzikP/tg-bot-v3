@@ -48,6 +48,7 @@ func VerifyPhone(update *tgbotapi.Update, tgUsers *sync.Map, store *storage.User
 	}
 
 	if phone, ok := tgUsers.Load(chatID); !ok {
+		tgUsers.Store(chatID, contactPhone)
 		err = store.Add(chatID, contactPhone)
 		if err != nil {
 			return false

@@ -9,7 +9,6 @@ import (
 type MenuBuilder struct {
 	MainMenu     []models.Menu
 	MyAlarmMenu  []models.Menu
-	BackMenu     []models.Menu
 	RequestPhone models.RequestPhone
 }
 
@@ -32,10 +31,6 @@ func New() *MenuBuilder {
 		{"Назад", "Back"},
 		{"Завершить работу с объектом", "Finish"},
 	}
-	backMenu := []models.Menu{
-		{"Назад", "Back"},
-		{"Завершить работу с объектом", "Finish"},
-	}
 	requestPhoneMenu := models.RequestPhone{
 		Text:           "Отправить номер телефона",
 		RequestContact: true,
@@ -43,21 +38,36 @@ func New() *MenuBuilder {
 	return &MenuBuilder{
 		MainMenu:     mainMenu,
 		MyAlarmMenu:  myAlarmMenu,
-		BackMenu:     backMenu,
 		RequestPhone: requestPhoneMenu,
 	}
 }
 
 func (b *MenuBuilder) BuildMainMenu(chatID int64, numberObject string) tgbotapi.MessageConfig {
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Информация", "GetInfoObject"),
-			tgbotapi.NewInlineKeyboardButtonData("КТС", "ChecksKTS"),
-		),
-	)
 
-	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("Объект %s\nВыберите действие:", numberObject))
-	msg.ReplyMarkup = keyboard
+	keyboard := tgbotapi.InlineKeyboardMarkup{}
+	for _, button := range b.MainMenu {
+		var row []tgbotapi.InlineKeyboardButton
+		btn := tgbotapi.NewInlineKeyboardButtonData(button.Text, button.CallbackData)
+		row = append(row, btn)
+		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, row)
+	}
+	text := fmt.Sprintf("Работа с объектом %s!\nВыберите пункт меню:", numberObject)
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ReplyMarkup = &keyboard
+	return msg
+}
+
+func (b *MenuBuilder) BuildMyAlarmMenu(chatID int64, numberObject string) tgbotapi.MessageConfig {
+	keyboard := tgbotapi.InlineKeyboardMarkup{}
+	for _, button := range b.MyAlarmMenu {
+		var row []tgbotapi.InlineKeyboardButton
+		btn := tgbotapi.NewInlineKeyboardButtonData(button.Text, button.CallbackData)
+		row = append(row, btn)
+		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, row)
+	}
+	text := fmt.Sprintf("Работа с объектом %s!\nВыберите пункт меню:", numberObject)
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ReplyMarkup = &keyboard
 	return msg
 }
 
@@ -75,5 +85,19 @@ func (b *MenuBuilder) RequestContact(chatID int64) tgbotapi.MessageConfig {
 	msg.ReplyMarkup = &keyboard
 
 	return msg
+}
 
+func BackAndFinish() tgbotapi.InlineKeyboardMarkup {
+	keyboard := tgbotapi.NewInlineKeyboardMarkup()
+	btn := tgbotapi.NewInlineKeyboardButtonData("Назад", "Back")
+	var row []tgbotapi.InlineKeyboardButton
+	row = append(row, btn)
+	keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, row)
+
+	btnFinish := tgbotapi.NewInlineKeyboardButtonData("Завершить работу с объектом", "Finish")
+	var rowFinish []tgbotapi.InlineKeyboardButton
+	rowFinish = append(rowFinish, btnFinish)
+	keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, rowFinish)
+
+	return keyboard
 }
