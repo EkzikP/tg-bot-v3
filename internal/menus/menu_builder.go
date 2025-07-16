@@ -102,12 +102,27 @@ func BackAndFinish() tgbotapi.InlineKeyboardMarkup {
 	return keyboard
 }
 
-func CheckKTS(CheckPanicId string) tgbotapi.InlineKeyboardMarkup {
+func CheckKTS() tgbotapi.InlineKeyboardMarkup {
 	keyboard := tgbotapi.NewInlineKeyboardMarkup()
 	btn := tgbotapi.NewInlineKeyboardButtonData("Получить результат проверки КТС", "ResultCheckKTS")
 	var row []tgbotapi.InlineKeyboardButton
 	row = append(row, btn)
 	keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, row)
 	keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, BackAndFinish().InlineKeyboard...)
+	return keyboard
+}
+
+func RoleMyAlarm() tgbotapi.InlineKeyboardMarkup {
+	keyboard := tgbotapi.NewInlineKeyboardMarkup()
+	btnAdmin := tgbotapi.NewInlineKeyboardButtonData("Администратор", "admin")
+	var rowAdmin []tgbotapi.InlineKeyboardButton
+	rowAdmin = append(rowAdmin, btnAdmin)
+	keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, rowAdmin)
+
+	btnUser := tgbotapi.NewInlineKeyboardButtonData("Пользователь", "user")
+	var rowUser []tgbotapi.InlineKeyboardButton
+	rowUser = append(rowUser, btnUser)
+	keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, rowUser)
+
 	return keyboard
 }

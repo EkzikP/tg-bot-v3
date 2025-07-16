@@ -2,6 +2,7 @@ package utils
 
 import (
 	"errors"
+	andromeda "github.com/EkzikP/sdk_andromeda_go_v2"
 	"github.com/EkzikP/tg-bot-v3/internal/storage"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"strings"
@@ -63,4 +64,17 @@ func VerifyPhone(update *tgbotapi.Update, tgUsers *sync.Map, store *storage.User
 		return true
 	}
 	return false
+}
+
+func IsMyAlarmAdmin(usersMyAlarm []andromeda.UserMyAlarmResponse, phoneUser string) bool {
+	var isAdmin bool
+	for _, user := range usersMyAlarm {
+		if user.MyAlarmPhone == phoneUser {
+			if user.Role == "admin" {
+				isAdmin = true
+			}
+			break
+		}
+	}
+	return isAdmin
 }

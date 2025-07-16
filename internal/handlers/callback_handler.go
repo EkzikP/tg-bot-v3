@@ -52,22 +52,23 @@ func (h *CallbackHandler) HandleCallback(ctx context.Context, update tgbotapi.Up
 		currentOperations.Update("CurrentRequest", callback.Data)
 		h.handleChecksKTS(ctx, chatID, currentOperations)
 	case "MyAlarm":
-		if h.haveMyAlarmRights(ctx, currentOperations, phoneUser.(string)) {
-			currentOperations.Update("CurrentRequest", callback.Data)
-			currentOperations.Update("CurrentMenu", "MyAlarmMenu")
-			msg := menus.New().BuildMyAlarmMenu(chatID, currentOperations.NumberObject)
-			h.sendMessage(msg)
-		} else {
-			msg := tgbotapi.NewMessage(chatID, "У вас нет прав на работу с системой MyAlarm")
-			h.sendMessage(msg)
-			msg = menus.New().BuildMainMenu(chatID, currentOperations.NumberObject)
-			h.sendMessage(msg)
-		}
+		h.handleMyAlarm(ctx, chatID, currentOperations, phoneUser, callback)
 	case "GetUsersMyAlarm":
+		currentOperations.Update("CurrentRequest", update.CallbackQuery.Data)
+		h.handleGetUsersMyAlarm(chatID, currentOperations)
+	case "GetUserObjectMyAlarm":
+		currentOperations.Update("CurrentRequest", update.CallbackQuery.Data)
+		h.handleGetUserObjectMyAlarm(ctx, chatID, phoneUser, update)
+	case "PutDelUserMyAlarm", "PutAddUserMyAlarm":
+		currentOperations.Update("CurrentRequest", update.CallbackQuery.Data)
+		h.handleChangeUserMyAlarm(ctx, chatID, currentOperations, phoneUser)
+	case "PutChangeVirtualKTS":
+		currentOperations.Update("CurrentRequest", update.CallbackQuery.Data)
+		h.handleChangeVirtualKTS(ctx, chatID, currentOperations, phoneUser)
+	case "GetParts":
 		currentOperation[chatID].changeValue("currentRequest", update.CallbackQuery.Data)
-		msg = getUsersMyAlarm(ctx, client, confSDK, currentOperation[chatID], chatID)
+		msg = GetParts(*currentOperation[chatID], chatID, ctx, client, confSDK)
 		msg.ReplyToMessageID = update.CallbackQuery.Message.MessageID
-
 		// Обработка других callback-ов
 	}
 }
@@ -161,7 +162,7 @@ func (h *CallbackHandler) handleChecksKTS(ctx context.Context, chatID int64, cur
 
 		text := fmt.Sprintf("%s\nВ течении 180 сек. нажмите кнпку КТС.\nИ нажмите кнопку \"Получить результат проверки КТС\"", PostCheckPanic[resp.Description])
 		msg := tgbotapi.NewMessage(chatID, text)
-		msg.ReplyMarkup = menus.CheckKTS(resp.CheckPanicId)
+		msg.ReplyMarkup = menus.CheckKTS()
 		h.sendMessage(msg)
 		return
 	} else if currentOperation.CurrentRequest == "ResultCheckKTS" {
@@ -169,7 +170,7 @@ func (h *CallbackHandler) handleChecksKTS(ctx context.Context, chatID int64, cur
 		resp, err := h.Andromeda.GetCheckPanic(ctx, currentOperation.CheckPanicId)
 		if err != nil {
 			msg := tgbotapi.NewMessage(chatID, err.Error())
-			msg.ReplyMarkup = menus.CheckKTS(currentOperation.CheckPanicId)
+			msg.ReplyMarkup = menus.CheckKTS()
 			h.sendMessage(msg)
 			return
 		}
@@ -185,7 +186,7 @@ func (h *CallbackHandler) handleChecksKTS(ctx context.Context, chatID int64, cur
 
 		msg := tgbotapi.NewMessage(chatID, CheckPanicResponse[resp.Description])
 		if resp.Description == "in progress" {
-			msg.ReplyMarkup = menus.CheckKTS(currentOperation.CheckPanicId)
+			msg.ReplyMarkup = menus.CheckKTS()
 		} else {
 			msg.ReplyMarkup = menus.BackAndFinish()
 		}
@@ -229,4 +230,199 @@ func (h *CallbackHandler) handleGetInfo(chatID int64) {
 
 	msg := tgbotapi.NewMessage(chatID, text)
 	h.Bot.Send(msg)
+}
+
+func (h *CallbackHandler) handleMyAlarm(ctx context.Context, chatID int64, currentOperations *models.Operation, phoneUser interface{}, callback *tgbotapi.CallbackQuery) {
+	if h.haveMyAlarmRights(ctx, currentOperations, phoneUser.(string)) {
+		currentOperations.Update("CurrentRequest", callback.Data)
+		currentOperations.Update("CurrentMenu", "MyAlarmMenu")
+		msg := menus.New().BuildMyAlarmMenu(chatID, currentOperations.NumberObject)
+		h.sendMessage(msg)
+	} else {
+		msg := tgbotapi.NewMessage(chatID, "У вас нет прав на работу с системой MyAlarm")
+		h.sendMessage(msg)
+		msg = menus.New().BuildMainMenu(chatID, currentOperations.NumberObject)
+		h.sendMessage(msg)
+	}
+}
+
+func (h *CallbackHandler) handleGetUsersMyAlarm(chatID int64, currentOperations *models.Operation) {
+	text := utils.ListUsersMyAlarm(currentOperations)
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ReplyMarkup = menus.BackAndFinish()
+	h.sendMessage(msg)
+}
+
+func (h *CallbackHandler) handleGetUserObjectMyAlarm(ctx context.Context, chatID int64, phoneUser interface{}, update tgbotapi.Update) {
+	text := h.Andromeda.GetUserObjectMyAlarm(ctx, phoneUser.(string), h.PhoneEngineer, update)
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ReplyMarkup = menus.BackAndFinish()
+	h.sendMessage(msg)
+}
+
+func (h *CallbackHandler) handleChangeUserMyAlarm(ctx context.Context, chatID int64, currentOperations *models.Operation, phoneUser interface{}) {
+	if currentOperations.ChangedUserId == "" {
+		if !utils.IsEngineer(phoneUser.(string), h.PhoneEngineer) && !utils.IsMyAlarmAdmin(currentOperations.UsersMyAlarm, phoneUser.(string)) {
+			msg := tgbotapi.NewMessage(chatID, "У вас нет прав управлять пользователями MyAlarm")
+			h.sendMessage(msg)
+			return
+		}
+
+		keyboard := tgbotapi.InlineKeyboardMarkup{}
+		if currentOperations.CurrentRequest == "PutDelUserMyAlarm" {
+
+			if len(currentOperations.UsersMyAlarm) == 0 {
+				msg := tgbotapi.NewMessage(chatID, "Не найдено ни одного пользователя MyAlarm")
+				msg.ReplyMarkup = menus.BackAndFinish()
+				h.sendMessage(msg)
+				return
+			}
+
+			for _, userMyAlarm := range currentOperations.UsersMyAlarm {
+				text := ""
+				for _, user := range currentOperations.Customers {
+					if userMyAlarm.CustomerID == user.Id {
+						text = user.ObjCustName + ", " + userMyAlarm.MyAlarmPhone
+						break
+					}
+				}
+
+				var row []tgbotapi.InlineKeyboardButton
+				btn := tgbotapi.NewInlineKeyboardButtonData(text, userMyAlarm.CustomerID)
+				row = append(row, btn)
+				keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, row)
+			}
+		} else {
+
+			for _, customer := range currentOperations.Customers {
+				if customer.UserNumber == 0 || customer.ObjCustPhone1 == "" {
+					continue
+				}
+
+				var row []tgbotapi.InlineKeyboardButton
+				btn := tgbotapi.NewInlineKeyboardButtonData(customer.ObjCustName+", "+customer.ObjCustPhone1, customer.Id)
+				row = append(row, btn)
+				keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, row)
+			}
+		}
+
+		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, menus.BackAndFinish().InlineKeyboard...)
+
+		msg := tgbotapi.NewMessage(chatID, "Выберите пользователя")
+		msg.ReplyMarkup = &keyboard
+		h.sendMessage(msg)
+		return
+	}
+
+	var role string
+	if currentOperations.CurrentRequest == "PutDelUserMyAlarm" {
+		role = "unlink"
+	} else if currentOperations.Role == "admin" {
+		role = "admin"
+	} else if currentOperations.Role == "user" {
+		role = "user"
+	} else {
+		msg := tgbotapi.NewMessage(chatID, "Выберите права пользователя")
+		keyboard := menus.RoleMyAlarm()
+		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, menus.BackAndFinish().InlineKeyboard...)
+		msg.ReplyMarkup = &keyboard
+		h.sendMessage(msg)
+		return
+	}
+
+	text := h.Andromeda.PutChangeUserMyAlarm(ctx, currentOperations, role)
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ReplyMarkup = menus.BackAndFinish()
+	h.sendMessage(msg)
+}
+
+func (h *CallbackHandler) handleChangeVirtualKTS(ctx context.Context, chatID int64, currentOperations *models.Operation, phoneUser interface{}) {
+
+	if currentOperations.ChangedUserId == "" {
+		if !utils.IsEngineer(phoneUser.(string), h.PhoneEngineer) && !utils.IsMyAlarmAdmin(currentOperations.UsersMyAlarm, phoneUser.(string)) {
+			msg := tgbotapi.NewMessage(chatID, "У вас нет прав управлять пользователями MyAlarm")
+			h.sendMessage(msg)
+			return
+		}
+
+		keyboard := tgbotapi.InlineKeyboardMarkup{}
+
+		if len(currentOperations.UsersMyAlarm) == 0 {
+			msg := tgbotapi.NewMessage(chatID, "Не найдено ни одного пользователя MyAlarm")
+			msg.ReplyMarkup = menus.BackAndFinish()
+			h.sendMessage(msg)
+			return
+		}
+
+		for _, userMyAlarm := range currentOperations.UsersMyAlarm {
+			text := ""
+			for _, user := range currentOperations.Customers {
+				if userMyAlarm.CustomerID == user.Id {
+					text = user.ObjCustName + ", " + userMyAlarm.MyAlarmPhone
+					break
+				}
+			}
+
+			var row []tgbotapi.InlineKeyboardButton
+			btn := tgbotapi.NewInlineKeyboardButtonData(text, userMyAlarm.CustomerID)
+			row = append(row, btn)
+			keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, row)
+		}
+
+		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, menus.BackAndFinish().InlineKeyboard...)
+
+		msg := tgbotapi.NewMessage(chatID, "Выберите пользователя")
+		msg.ReplyMarkup = &keyboard
+		h.sendMessage(msg)
+		return
+	}
+
+	if currentOperations.Role == "" {
+		keyboard := tgbotapi.NewInlineKeyboardMarkup()
+		btnTrue := tgbotapi.NewInlineKeyboardButtonData("Разрешить", "true")
+		var rowTrue []tgbotapi.InlineKeyboardButton
+		rowTrue = append(rowTrue, btnTrue)
+		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, rowTrue)
+
+		btnFalse := tgbotapi.NewInlineKeyboardButtonData("Запретить", "false")
+		var rowFalse []tgbotapi.InlineKeyboardButton
+		rowFalse = append(rowFalse, btnFalse)
+		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, rowFalse)
+
+		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, menus.BackAndFinish().InlineKeyboard...)
+
+		msg := tgbotapi.NewMessage(chatID, "Разрешить или запретить виртуальную КТС?")
+		msg.ReplyMarkup = &keyboard
+		h.sendMessage(msg)
+		return
+	}
+
+	var isPanic bool
+	if currentOperations.Role == "true" {
+		isPanic = true
+	}
+
+	err := h.Andromeda.PutChangeVirtualKTS(ctx, currentOperations, isPanic)
+	if err != nil {
+		msg := tgbotapi.NewMessage(chatID, "Не удалось изменить значение виртуальной КТС")
+		msg.ReplyMarkup = menus.BackAndFinish()
+		h.sendMessage(msg)
+		return
+	}
+
+	data := ""
+	if isPanic {
+		data = "разрешена."
+	} else {
+		data = "запрещена."
+	}
+
+	currentOperations.Update("ChangedUserId", "")
+	currentOperations.Update("Role", "")
+
+	msg := tgbotapi.NewMessage(chatID, "Виртуальная КТС у пользователя "+data)
+	msg.ReplyMarkup = menus.BackAndFinish()
+	h.sendMessage(msg)
+	return
 }
